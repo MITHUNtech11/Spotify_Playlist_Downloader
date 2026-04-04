@@ -1,0 +1,16 @@
+[2026-04-03 19:23:24] [INFO] ================================================================================ SESSION START ================================================================================
+[2026-04-03 19:23:24] [INFO] Log file created: C:\Users\mithu\OneDrive\Desktop\Coding Practice\Playlist_Downloader\download_log.txt
+[2026-04-03 19:23:24] [INFO] ============================================================ STEP 1: Converting Spotify Track URLs ============================================================
+[2026-04-03 19:23:24] [INFO] Found 172 track URLs, using 12 threads
+[2026-04-03 19:23:48] [SUCCESS] ✅ Exported 171/172 songs to songs.txt
+[2026-04-03 19:23:48] [INFO] 🗑️  Removed incomplete download: Ennavendru solvathamma Vanji aval perazhagai song lyrics in tamil.webm.part
+[2026-04-03 19:23:48] [INFO] 🧹 Cleanup: Removed 1 incomplete file(s)
+[2026-04-03 19:23:48] [INFO] ============================================================ PREVIEW SUMMARY ============================================================
+[2026-04-03 19:23:48] [INFO] Total songs: 171
+[2026-04-03 19:23:48] [INFO] Duplicates in list: 1
+[2026-04-03 19:23:48] [INFO] Unique songs: 170
+[2026-04-03 19:23:48] [INFO] Already downloaded: 78
+[2026-04-03 19:23:48] [INFO] New to download: 92
+[2026-04-03 19:24:18] [INFO] User cancelled download
+[2026-04-03 19:24:18] [INFO] ❌ Download cancelled by user
+[2026-04-03 19:24:18] [INFO] ================================================================================ SESSION END ================================================================================
