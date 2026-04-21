@@ -1,3 +1,5 @@
+# Readme for Spotify Playlist Downloader
+
 # Spotify Playlist Downloader
 
 A Python tool to convert Spotify playlist track URLs into song names and automatically download the corresponding audio from YouTube, saving them as MP3 files. Designed for easy batch downloading and organization of your favorite playlists.
