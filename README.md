@@ -1,95 +1,165 @@
-# Readme for Spotify Playlist Downloader
+# Spotify Playlist Downloader 🎵
 
-# Spotify Playlist Downloader
+A powerful Python tool to convert Spotify track URLs into song metadata and automatically download the corresponding audio from YouTube as high-quality MP3s with **embedded ID3 tags (Title, Artist) and Spotify album artwork**.
 
-A Python tool to convert Spotify playlist track URLs into song names and automatically download the corresponding audio from YouTube, saving them as MP3 files. Designed for easy batch downloading and organization of your favorite playlists.
+Designed for batch downloading, playlist archival, and organizing music for car infotainment systems or USB pen drives.
 
-## Features
+---
 
-- **Convert Spotify Track URLs:** Extracts song names and artists from Spotify track URLs (no API key required).
-- **Batch Download:** Downloads songs from YouTube using multithreading for speed.
-- **Duplicate Handling:** Skips already-downloaded songs and removes duplicates.
-- **Logging:** Detailed logs for every session and step.
-- **Preview & Confirmation:** Shows a summary before downloading and asks for user confirmation.
-- **Cleanup:** Removes incomplete downloads automatically.
-- **Custom Download Folder:** Set your preferred download location via `.env` or defaults.
+## ✨ Features
 
-## Requirements
+- **Reliable Spotify Metadata Resolution:** Uses Spotify's official public `oEmbed` API and page metadata (no API keys or credentials required).
+- **Embedded ID3 Tags & Album Artwork:** Automatically tags MP3s with song title, artist, and embeds high-resolution Spotify album covers.
+- **Batch Downloads with Multi-threading:** Fast parallel downloads via `yt-dlp` with rate-limit protection.
+- **Accurate Duplicate Handling:** Skips already-downloaded songs using normalized title comparison without false positives.
+- **Interactive Preview & Summary:** Displays a clean metric table before downloading and asks for confirmation.
+- **Automated Cleanup:** Automatically purges temporary `.part` files from aborted downloads.
+- **CLI & Configuration Options:** Run with CLI arguments (`--urls`, `--output`, `--threads`, `--yes`) or configure defaults via `.env`.
+- **USB / Pen Drive Sync Utility:** Companion tool (`copy_to_pendrive.py`) to sync downloaded songs to a USB drive using SHA-256 duplicate detection.
 
-- Python 3.8+
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-- [requests](https://pypi.org/project/requests/)
-- [beautifulsoup4](https://pypi.org/project/beautifulsoup4/)
-- [python-dotenv](https://pypi.org/project/python-dotenv/)
+---
 
-Install dependencies (if using a virtual environment, activate it first):
+## 📋 Requirements
 
+1. **Python 3.8+**
+2. **FFmpeg** (Required by `yt-dlp` for extracting and converting audio to MP3):
+   - **Windows (PowerShell):**
+     ```powershell
+     winget install Gyan.FFmpeg
+     ```
+   - **macOS (Homebrew):**
+     ```bash
+     brew install ffmpeg
+     ```
+   - **Linux (Debian/Ubuntu):**
+     ```bash
+     sudo apt update && sudo apt install ffmpeg
+     ```
+
+---
+
+## 🚀 Setup & Installation
+
+### 1. Clone the repository
 ```bash
-pip install yt-dlp requests beautifulsoup4 python-dotenv
+git clone https://github.com/MITHUNtech11/Spotify_Playlist_Downloader.git
+cd Spotify_Playlist_Downloader
 ```
 
-## Usage
+### 2. Create and activate a virtual environment (`.venv`)
+- **Windows (PowerShell):**
+  ```powershell
+  python -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+  ```
+- **macOS / Linux:**
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  ```
 
-1. **Prepare Your Track URLs:**
-   - Add Spotify track URLs (one per line) to `track_urls.txt`.
+### 3. Install dependencies
+```bash
+pip install -r requirements.txt
+```
 
-2. **Configure Download Folder (Optional):**
-   - Create a `.env` file and set:
-     ```
-     DOWNLOAD_FOLDER=./Dad_Car_Songs
-     ```
-   - Or use the default folder.
+---
 
-3. **Run the Downloader:**
+## 🎯 Usage
+
+### Basic Usage (Interactive)
+1. Add Spotify track URLs (one per line) to `track_urls.txt`:
+   ```text
+   https://open.spotify.com/track/2109dBho14Lqh2wr8goqAP
+   https://open.spotify.com/track/3jrOziEVwpJAETyEDZ5HWa
+   https://open.spotify.com/track/5HgXSvl2YoBtEY623UsACk
+   ```
+
+2. (Optional) Set your preferred download destination in `.env`:
+   ```env
+   DOWNLOAD_FOLDER=./Dad_Car_Songs
+   ```
+
+3. Run the downloader:
    ```bash
    python playlist_downloader_combined.py
    ```
-   - The script will:
-     - Convert Spotify URLs to song names (`songs.txt`).
-     - Show a preview and ask for confirmation.
-     - Download new songs as MP3s to your chosen folder.
-     - Log all actions in `download_log.txt`.
+   The script will:
+   - Extract track metadata via Spotify oEmbed.
+   - Output extracted song titles into `songs.txt`.
+   - Display a preview summary table.
+   - Ask for confirmation (`Y/n`).
+   - Download MP3s with embedded ID3 tags and album cover art.
+   - Log all operations to `download_log.txt`.
 
-4. **Check Your Songs:**
-   - Downloaded songs are saved in the specified folder.
-   - See `songs.txt` for the list of extracted song names.
+---
 
-## File Structure
+### Command-Line Arguments (Advanced)
 
-- `playlist_downloader_combined.py` — Main script for the full workflow.
-- `track_urls.txt` — Input: Spotify track URLs.
-- `songs.txt` — Output: Extracted song names.
-- `download_log.txt` — Log file for all actions.
-- `Dad_Car_Songs/` — Default download folder (can be changed).
-- `copy_to_pendrive.py` — (Optional) Utility to copy downloaded songs to a USB drive, avoiding duplicates.
+You can pass arguments directly without modifying `.env`:
 
-## Example
-
-**track_urls.txt:**
-```
-https://open.spotify.com/track/2109dBho14Lqh2wr8goqAP
-https://open.spotify.com/track/3jrOziEVwpJAETyEDZ5HWa
+```bash
+python playlist_downloader_combined.py --help
 ```
 
-**songs.txt (output):**
+| Flag | Description | Default |
+| :--- | :--- | :--- |
+| `-u`, `--urls` | Path to Spotify track URLs file | `track_urls.txt` |
+| `-o`, `--output` | Destination directory for downloaded songs | `./Dad_Car_Songs` |
+| `-t`, `--threads` | Concurrent download threads | `3` |
+| `-y`, `--yes` | Auto-confirm and start download without prompting | `False` |
+| `--clean-only` | Only clean up incomplete `.part` files and exit | `False` |
+
+#### Examples:
+```bash
+# Download with custom folder and URLs:
+python playlist_downloader_combined.py -u my_tracks.txt -o "D:/Music/RoadTrip"
+
+# Run non-interactively (ideal for scripts/cron jobs):
+python playlist_downloader_combined.py -y
 ```
-Athi Kaalai Kaatre Nillu - S. Janaki
-Kadhalikum Pennin - A.R. Rahman, S. P. Balasubrahmanyam
-...
+
+---
+
+## 📱 Syncing to USB / Pen Drive
+
+Use `copy_to_pendrive.py` to copy songs to a flash drive without duplicates:
+```bash
+python copy_to_pendrive.py
+```
+- Automatically detects connected drive letters and free disk space.
+- Calculates **SHA-256 hashes** so files are not copied twice even if they were renamed on the flash drive.
+
+---
+
+## 📂 Project Structure
+
+```text
+Playlist_Downloader/
+├── .venv/                          # Virtual environment
+├── .env.example                    # Example environment configuration
+├── requirements.txt                # Project dependencies
+├── playlist_downloader_combined.py # Main downloader script
+├── copy_to_pendrive.py             # USB sync script with SHA-256 hashing
+├── track_urls.txt                  # Input: Spotify track links
+├── songs.txt                       # Output: Extracted song titles
+├── download_log.txt                # Session execution log
+└── README.md                       # Project documentation
 ```
 
-## Notes
+---
 
-- The script scrapes Spotify web pages for song info (no API key needed).
-- Downloads use YouTube search for best match (may not always be perfect).
-- For large playlists, the process may take time depending on your internet speed.
+## 🛠️ Troubleshooting
 
-## Troubleshooting
+- **`ffprobe or avprobe not found`:**
+  Install FFmpeg on your system (see [Requirements](#-requirements)) and restart your terminal.
+- **Script skips a song:**
+  The song already exists in the destination folder. Check the folder or rename if you want to re-download.
+- **YouTube 429 / Rate Limit:**
+  Keep the download threads at `3` (the default) or lower (`-t 2`) to ensure YouTube does not throttle requests.
 
-- If you see errors about missing modules, ensure all dependencies are installed.
-- If downloads fail, check your internet connection and YouTube accessibility.
-- For permission issues, try running the terminal as administrator.
+---
 
-## License
+## 📄 License
 
-MIT License
+This project is licensed under the MIT License.

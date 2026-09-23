@@ -29,6 +29,7 @@ wheels/
 *.egg
 
 # Virtual Environment
+.venv/
 s/
 venv/
 ENV/
@@ -40,6 +41,9 @@ env/
 *.swp
 *.swo
 
-# Downloads
+# Downloads & Logs
+download_log.txt
 Dad_Car_Songs/
-Spotify songs
+Spotify songs/
+Mithun_songs/
+trial/

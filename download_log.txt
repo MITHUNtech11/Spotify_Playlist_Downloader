@@ -1,16 +1,14 @@
-[2026-04-03 19:23:24] [INFO] ================================================================================ SESSION START ================================================================================
-[2026-04-03 19:23:24] [INFO] Log file created: C:\Users\mithu\OneDrive\Desktop\Coding Practice\Playlist_Downloader\download_log.txt
-[2026-04-03 19:23:24] [INFO] ============================================================ STEP 1: Converting Spotify Track URLs ============================================================
-[2026-04-03 19:23:24] [INFO] Found 172 track URLs, using 12 threads
-[2026-04-03 19:23:48] [SUCCESS] ✅ Exported 171/172 songs to songs.txt
-[2026-04-03 19:23:48] [INFO] 🗑️  Removed incomplete download: Ennavendru solvathamma Vanji aval perazhagai song lyrics in tamil.webm.part
-[2026-04-03 19:23:48] [INFO] 🧹 Cleanup: Removed 1 incomplete file(s)
-[2026-04-03 19:23:48] [INFO] ============================================================ PREVIEW SUMMARY ============================================================
-[2026-04-03 19:23:48] [INFO] Total songs: 171
-[2026-04-03 19:23:48] [INFO] Duplicates in list: 1
-[2026-04-03 19:23:48] [INFO] Unique songs: 170
-[2026-04-03 19:23:48] [INFO] Already downloaded: 78
-[2026-04-03 19:23:48] [INFO] New to download: 92
-[2026-04-03 19:24:18] [INFO] User cancelled download
-[2026-04-03 19:24:18] [INFO] ❌ Download cancelled by user
-[2026-04-03 19:24:18] [INFO] ================================================================================ SESSION END ================================================================================
+[2026-09-23 14:21:07] [INFO] ================================================================================ SESSION START ================================================================================
+[2026-09-23 14:21:07] [INFO] Log file: C:\Users\mithu\OneDrive\Desktop\Coding Practice\Playlist_Downloader\download_log.txt
+[2026-09-23 14:21:07] [INFO] FFmpeg located: C:\Users\mithu\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin
+[2026-09-23 14:21:07] [INFO] ============================================================ STEP 1: Converting Spotify Track URLs ============================================================
+[2026-09-23 14:21:07] [INFO] Found 3 track URLs, using 8 threads
+[2026-09-23 14:21:09] [SUCCESS] ✅ Exported 3/3 songs to songs.txt
+[2026-09-23 14:21:09] [INFO] ============================================================ PREVIEW SUMMARY ============================================================
+[2026-09-23 14:21:09] [INFO] Total: 3, Unique: 3, Already downloaded: 0, New: 3
+[2026-09-23 14:21:09] [INFO] ============================================================ STEP 2: Downloading Songs from YouTube ============================================================
+[2026-09-23 14:21:09] [INFO] 📁 Destination: C:\Users\mithu\OneDrive\Desktop\Coding Practice\Playlist_Downloader\test_run | 🚀 Threads: 2 | Total: 3
+[2026-09-23 14:21:44] [INFO] ============================================================ DOWNLOAD SUMMARY ============================================================
+[2026-09-23 14:21:44] [INFO] ✅ Successful: 3 | ⏭️ Skipped: 0 | ❌ Failed: 0
+[2026-09-23 14:21:44] [SUCCESS] Session completed successfully
+[2026-09-23 14:21:44] [INFO] ================================================================================ SESSION END ================================================================================
