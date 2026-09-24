@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from datetime import datetime
+import time
 
 # Configure Windows console encoding for Unicode/emojis
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
@@ -196,7 +197,17 @@ def process_track(args):
     with print_lock:
         print(f"  [{i}/{total}] Fetching: {track_id}")
     
-    info = get_song_info_from_url(track_url)
+    info = None
+    for attempt in range(4):
+        try:
+            info = get_song_info_from_url(track_url)
+            if info and info.get('display_name'):
+                break
+        except Exception:
+            pass
+        if not info and attempt < 3:
+            time.sleep(1.5 * (attempt + 1))
+            
     if info:
         display_name = info['display_name']
         with print_lock:
@@ -232,24 +243,51 @@ def convert_urls_to_songs(input_file='track_urls.txt', output_file='songs.txt', 
     log_message(info_msg, "INFO")
     print("\nFetching song info via Spotify oEmbed & metadata API...\n")
     
-    songs = []
-    metadata_map = {}
     tasks = [(i+1, len(track_ids), track_id) for i, track_id in enumerate(track_ids)]
+    results = [None] * len(track_ids)
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_track, task): task for task in tasks}
+        futures = {executor.submit(process_track, task): idx for idx, task in enumerate(tasks)}
         completed = 0
         for future in as_completed(futures):
-            res = future.result()
-            if res:
-                disp = res['display_name']
-                songs.append(disp)
-                metadata_map[disp] = res
+            idx = futures[future]
+            try:
+                res = future.result()
+                results[idx] = res
+            except Exception as e:
+                with print_lock:
+                    log_message(f"⚠️ Error processing track #{idx+1}: {e}", "WARNING")
             completed += 1
             progress = (completed / len(track_ids)) * 100
             if completed % 5 == 0 or completed == len(track_ids):
                 with print_lock:
                     print(f"  Progress: {completed}/{len(track_ids)} ({progress:.0f}%)")
+    
+    # Second pass for any tracks that encountered temporary connection issues
+    missing_indices = [idx for idx, res in enumerate(results) if res is None]
+    if missing_indices:
+        with print_lock:
+            print(f"\n🔄 Retrying {len(missing_indices)} tracks that encountered temporary connection issues...")
+        time.sleep(2)
+        retry_tasks = [(idx+1, len(track_ids), track_ids[idx]) for idx in missing_indices]
+        with ThreadPoolExecutor(max_workers=4) as retry_executor:
+            retry_futures = {retry_executor.submit(process_track, task): idx for idx, task in zip(missing_indices, retry_tasks)}
+            for future in as_completed(retry_futures):
+                idx = retry_futures[future]
+                try:
+                    res = future.result()
+                    if res:
+                        results[idx] = res
+                except Exception:
+                    pass
+    
+    songs = []
+    metadata_map = {}
+    for res in results:
+        if res:
+            disp = res['display_name']
+            songs.append(disp)
+            metadata_map[disp] = res
     
     if songs:
         with open(output_file, 'w', encoding='utf-8') as f:
@@ -322,17 +360,17 @@ def preview_and_confirm(songs_list, output_path, auto_confirm=False):
         return True
     
     print(f"\n🎧 Start downloading {new_to_download} new song(s)?")
-    user_input = input("Continue? (Y/n): ").strip().lower()
-    
-    if user_input in ['n', 'no']:
-        log_message("User cancelled download", "INFO")
-        return False
-    elif user_input in ['y', 'yes', '']:
-        log_message("User confirmed to proceed with download", "INFO")
-        return True
-    else:
-        print("⚠️  Please enter 'Y' or 'N'")
-        return preview_and_confirm(songs_list, output_path, auto_confirm)
+    while True:
+        user_input = input("Continue? (Y/n): ").strip().lower()
+        
+        if user_input in ['n', 'no']:
+            log_message("User cancelled download", "INFO")
+            return False
+        elif user_input in ['y', 'yes', '']:
+            log_message("User confirmed to proceed with download", "INFO")
+            return True
+        else:
+            print("⚠️  Please enter 'Y' or 'N'")
 
 # ============================================================================
 # PART 2: DOWNLOAD SONGS FROM YOUTUBE WITH ID3 TAGGING
@@ -440,15 +478,66 @@ def embed_id3_tags(file_path, song_metadata):
         with print_lock:
             log_message(f"⚠️  Could not embed ID3 tags for {os.path.basename(file_path)}: {e}", "WARNING")
 
+def find_existing_song_in_library(song_name, library_folders):
+    """Check if song exists in local libraries (e.g. Dad_Car_Songs, Spotify songs)."""
+    sanitized_song = re.sub(r'[<>:"/\\|?*]', '', song_name).strip().lower()
+    audio_extensions = ('.mp3', '.webm', '.m4a', '.aac', '.wav', '.flac', '.opus')
+    
+    title_part = sanitized_song
+    artist_part = ""
+    if ' - ' in sanitized_song:
+        parts = sanitized_song.split(' - ', 1)
+        title_part = parts[0].strip()
+        artist_part = parts[1].strip()
+    
+    for folder in library_folders:
+        if not os.path.exists(folder):
+            continue
+        for filename in os.listdir(folder):
+            if filename.endswith(('.part', '.ytdl')):
+                continue
+            if filename.lower().endswith(audio_extensions):
+                base_filename = os.path.splitext(filename)[0].lower()
+                matched = False
+                if sanitized_song == base_filename or title_part == base_filename:
+                    matched = True
+                elif title_part and len(title_part) > 3 and title_part in base_filename:
+                    if not artist_part:
+                        matched = True
+                    else:
+                        primary_artist = artist_part.split(',')[0].strip()
+                        if primary_artist and len(primary_artist) > 2 and primary_artist in base_filename:
+                            matched = True
+                if matched:
+                    return os.path.join(folder, filename)
+    return None
+
 def download_single_song(args):
-    """Download a single song from YouTube using yt-dlp."""
+    """Download a single song from YouTube using yt-dlp, reusing local library if present."""
     index, total, song, output_path, metadata = args
     
-    # Check if song already exists
+    # Check if song already exists in destination
     if song_already_exists(song, output_path):
         with print_lock:
             print(f"[{index}/{total}] ⏭️  Skipped (already exists): {song}\n")
         return 'skipped'
+    
+    # Check local library folders first to accelerate downloads
+    local_libs = ['./Dad_Car_Songs', './Spotify songs']
+    local_libs = [lib for lib in local_libs if os.path.abspath(lib) != os.path.abspath(output_path)]
+    existing_lib_file = find_existing_song_in_library(song, local_libs)
+    if existing_lib_file:
+        try:
+            dest_file = os.path.join(output_path, os.path.basename(existing_lib_file))
+            shutil.copy2(existing_lib_file, dest_file)
+            if metadata:
+                embed_id3_tags(dest_file, metadata)
+            with print_lock:
+                print(f"[{index}/{total}] 📂 Reused from library: {os.path.basename(dest_file)}\n")
+            return 'success'
+        except Exception as e:
+            with print_lock:
+                print(f"[{index}/{total}] ⚠️ Could not copy from library: {e}, falling back to YouTube")
     
     with print_lock:
         print(f"[{index}/{total}] 🎵 Searching: {song}")
@@ -480,24 +569,64 @@ def download_single_song(args):
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             query = f"{song} official audio"
-            info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+            info = None
+            try:
+                info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+            except Exception:
+                info = None
+            
+            # Fallback query if official audio yielded no results
+            if not info or not info.get('entries'):
+                try:
+                    info = ydl.extract_info(f"ytsearch1:{song}", download=True)
+                except Exception:
+                    info = None
             
             if info:
                 entry = info['entries'][0] if ('entries' in info and info['entries']) else info
                 downloaded_title = entry.get('title', song)
                 
                 # Accurately resolve output mp3 file path
-                downloaded_file = os.path.splitext(ydl.prepare_filename(entry))[0] + '.mp3'
+                downloaded_file = None
                 
-                # Fallback: scan folder for matching mp3 if filename was modified by postprocessors
-                if not os.path.exists(downloaded_file):
-                    for f in os.listdir(output_path):
-                        if f.endswith('.mp3') and (downloaded_title.lower() in f.lower() or f.lower() in downloaded_title.lower()):
-                            downloaded_file = os.path.join(output_path, f)
+                # 1. Check requested_downloads from yt-dlp post-processing
+                if 'requested_downloads' in entry and entry['requested_downloads']:
+                    for req in reversed(entry['requested_downloads']):
+                        fp = req.get('filepath')
+                        if fp and fp.lower().endswith('.mp3') and os.path.exists(fp):
+                            downloaded_file = fp
                             break
                 
+                # 2. Check filepath field directly
+                if not downloaded_file:
+                    fp = entry.get('filepath')
+                    if fp and fp.lower().endswith('.mp3') and os.path.exists(fp):
+                        downloaded_file = fp
+                
+                # 3. Check prepared filename with .mp3 extension
+                if not downloaded_file:
+                    prep = os.path.splitext(ydl.prepare_filename(entry))[0] + '.mp3'
+                    if os.path.exists(prep):
+                        downloaded_file = prep
+                
+                # 4. Conservative exact sanitized title match in output directory
+                if not downloaded_file:
+                    sanitized_base = re.sub(r'[<>:"/\\|?*]', '', downloaded_title).strip().lower()
+                    for f in os.listdir(output_path):
+                        if f.lower().endswith('.mp3'):
+                            f_base = os.path.splitext(f)[0].lower()
+                            if f_base == sanitized_base:
+                                downloaded_file = os.path.join(output_path, f)
+                                break
+                
+                # Verify file exists; fail safely rather than guessing or modifying the wrong MP3
+                if not downloaded_file or not os.path.exists(downloaded_file):
+                    with print_lock:
+                        print(f"  ❌ Output MP3 file could not be verified for: {song}\n")
+                    return 'failed'
+                
                 # Embed ID3 tags & Album artwork
-                if metadata and os.path.exists(downloaded_file):
+                if metadata:
                     embed_id3_tags(downloaded_file, metadata)
                 
                 with print_lock:

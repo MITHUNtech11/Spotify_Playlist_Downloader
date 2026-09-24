@@ -1,14 +1,11 @@
-[2026-09-23 14:21:07] [INFO] ================================================================================ SESSION START ================================================================================
-[2026-09-23 14:21:07] [INFO] Log file: C:\Users\mithu\OneDrive\Desktop\Coding Practice\Playlist_Downloader\download_log.txt
-[2026-09-23 14:21:07] [INFO] FFmpeg located: C:\Users\mithu\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin
-[2026-09-23 14:21:07] [INFO] ============================================================ STEP 1: Converting Spotify Track URLs ============================================================
-[2026-09-23 14:21:07] [INFO] Found 3 track URLs, using 8 threads
-[2026-09-23 14:21:09] [SUCCESS] ✅ Exported 3/3 songs to songs.txt
-[2026-09-23 14:21:09] [INFO] ============================================================ PREVIEW SUMMARY ============================================================
-[2026-09-23 14:21:09] [INFO] Total: 3, Unique: 3, Already downloaded: 0, New: 3
-[2026-09-23 14:21:09] [INFO] ============================================================ STEP 2: Downloading Songs from YouTube ============================================================
-[2026-09-23 14:21:09] [INFO] 📁 Destination: C:\Users\mithu\OneDrive\Desktop\Coding Practice\Playlist_Downloader\test_run | 🚀 Threads: 2 | Total: 3
-[2026-09-23 14:21:44] [INFO] ============================================================ DOWNLOAD SUMMARY ============================================================
-[2026-09-23 14:21:44] [INFO] ✅ Successful: 3 | ⏭️ Skipped: 0 | ❌ Failed: 0
-[2026-09-23 14:21:44] [SUCCESS] Session completed successfully
-[2026-09-23 14:21:44] [INFO] ================================================================================ SESSION END ================================================================================
+[2026-09-24 20:10:50] [INFO] ================================================================================ SESSION START ================================================================================
+[2026-09-24 20:10:50] [INFO] Log file: C:\Users\mithu\OneDrive\Desktop\Coding Practice\Playlist_Downloader\download_log.txt
+[2026-09-24 20:10:50] [INFO] FFmpeg located: C:\Users\mithu\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin
+[2026-09-24 20:10:50] [INFO] ============================================================ STEP 1: Converting Spotify Track URLs ============================================================
+[2026-09-24 20:10:50] [INFO] Found 225 track URLs, using 8 threads
+[2026-09-24 20:11:30] [SUCCESS] ✅ Exported 225/225 songs to songs.txt
+[2026-09-24 20:11:30] [INFO] ============================================================ PREVIEW SUMMARY ============================================================
+[2026-09-24 20:11:30] [INFO] Total: 225, Unique: 217, Already downloaded: 146, New: 71
+[2026-09-24 20:11:30] [INFO] User cancelled download
+[2026-09-24 20:11:30] [INFO] ❌ Download cancelled by user
+[2026-09-24 20:11:30] [INFO] ================================================================================ SESSION END ================================================================================
