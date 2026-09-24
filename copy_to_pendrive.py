@@ -19,8 +19,9 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
     except Exception:
         pass
 
-# Thread-safe output
+# Thread-safe locks
 print_lock = Lock()
+size_map_lock = Lock()
 
 def get_file_hash(filepath, chunk_size=65536):
     """Calculate SHA256 hash of a file"""
@@ -35,29 +36,34 @@ def get_file_hash(filepath, chunk_size=65536):
             print(f"  ❌ Error hashing {filepath}: {e}")
         return None
 
-def scan_directory_for_hashes(directory):
-    """Scan directory and create hash map of all files"""
-    hash_map = {}
+def scan_directory_for_sizes(directory):
+    """Scan directory and create a map of file sizes to lists of file paths"""
+    size_map = {}
     
     if not os.path.exists(directory):
-        return hash_map
+        return size_map
     
-    print(f"Scanning {directory} for existing files...")
+    print(f"Scanning {directory} for existing files (by size)...")
     
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith(('.mp3', '.m4a', '.wav', '.flac')):
+            if file.lower().endswith(('.mp3', '.m4a', '.wav', '.flac', '.opus', '.aac')):
                 filepath = os.path.join(root, file)
-                file_hash = get_file_hash(filepath)
-                if file_hash:
-                    hash_map[filepath] = file_hash
-    
-    print(f"Found {len(hash_map)} existing audio files\n")
-    return hash_map
+                try:
+                    size = os.path.getsize(filepath)
+                    if size not in size_map:
+                        size_map[size] = []
+                    size_map[size].append(filepath)
+                except Exception:
+                    pass
+                    
+    count = sum(len(paths) for paths in size_map.values())
+    print(f"Found {count} existing audio files\n")
+    return size_map
 
 def copy_single_file(args):
     """Copy a single file - used by thread pool"""
-    index, total, source, destination, existing_hashes = args
+    index, total, source, destination, existing_sizes = args
     
     filename = os.path.basename(source)
     
@@ -65,27 +71,35 @@ def copy_single_file(args):
         print(f"[{index}/{total}] 📋 Processing: {filename}")
     
     try:
-        # Calculate hash of source file
-        source_hash = get_file_hash(source)
-        if not source_hash:
-            with print_lock:
-                print(f"  ❌ Could not hash file\n")
-            return False
+        source_size = os.path.getsize(source)
         
-        # Check if file already exists on pen drive (by hash)
-        for existing_file, existing_hash in existing_hashes.items():
-            if source_hash == existing_hash:
-                with print_lock:
-                    print(f"  ⏭️  Skipped (duplicate found)\n")
-                return False
-        
-        # Check if destination file exists
+        # Check if destination file exists and has same size
         if os.path.exists(destination):
-            dest_hash = get_file_hash(destination)
-            if dest_hash == source_hash:
+            dest_size = os.path.getsize(destination)
+            if dest_size == source_size:
                 with print_lock:
-                    print(f"  ⏭️  Skipped (already copied)\n")
+                    print(f"  ⏭️  Skipped (already copied with same size)\n")
                 return False
+                
+        # Check for duplicates using size, then hash (thread-safe snapshot of candidate paths)
+        candidate_paths = []
+        with size_map_lock:
+            if source_size in existing_sizes:
+                candidate_paths = list(existing_sizes[source_size])
+        
+        is_duplicate = False
+        if candidate_paths:
+            source_hash = get_file_hash(source)
+            if source_hash:
+                for existing_path in candidate_paths:
+                    if os.path.exists(existing_path) and get_file_hash(existing_path) == source_hash:
+                        is_duplicate = True
+                        break
+                        
+        if is_duplicate:
+            with print_lock:
+                print(f"  ⏭️  Skipped (duplicate found by hash)\n")
+            return False
         
         # Copy file
         with print_lock:
@@ -94,8 +108,14 @@ def copy_single_file(args):
         shutil.copy2(source, destination)
         
         with print_lock:
-            file_size_mb = os.path.getsize(destination) / (1024 * 1024)
+            file_size_mb = source_size / (1024 * 1024)
             print(f"  ✅ Copied ({file_size_mb:.1f} MB)\n")
+        
+        # Update existing sizes map in thread-safe manner
+        with size_map_lock:
+            if source_size not in existing_sizes:
+                existing_sizes[source_size] = []
+            existing_sizes[source_size].append(destination)
         
         return True
         
@@ -122,7 +142,6 @@ def copy_songs_to_pendrive(source_folder='Dad_Car_Songs',
             drive_letter = f"{drive}:\\"
             if os.path.exists(drive_letter):
                 try:
-                    # Get drive info
                     import ctypes
                     free = ctypes.c_ulonglong()
                     ctypes.windll.kernel32.GetDiskFreeSpaceEx(
@@ -131,33 +150,32 @@ def copy_songs_to_pendrive(source_folder='Dad_Car_Songs',
                     )
                     free_gb = free.value / (1024**3)
                     print(f"  {drive_letter} ({free_gb:.1f} GB free)")
-                except:
+                except Exception:
                     print(f"  {drive_letter}")
         
         pendrive_path = input("\nEnter pen drive path (e.g., E:\\Music): ").strip()
     
     if not os.path.exists(pendrive_path):
-        print(f"❌ Path not found: {pendrive_path}")
-        return False
+        try:
+            os.makedirs(pendrive_path, exist_ok=True)
+            print(f"✅ Created folder: {pendrive_path}\n")
+        except Exception as e:
+            print(f"❌ Could not access or create path: {pendrive_path} ({e})")
+            return False
     
     if not os.path.exists(source_folder):
         print(f"❌ Source folder not found: {source_folder}")
         return False
     
-    # Use the pen drive path directly (no subfolder creation)
     dest_subfolder = pendrive_path
-    if not os.path.exists(dest_subfolder):
-        os.makedirs(dest_subfolder)
-        print(f"✅ Created folder: {dest_subfolder}\n")
-    else:
-        print(f"✅ Destination: {dest_subfolder}\n")
+    print(f"✅ Destination: {dest_subfolder}\n")
     
     # Get list of songs to copy
     print(f"📂 Scanning source: {os.path.abspath(source_folder)}")
     songs_to_copy = []
     
     for file in os.listdir(source_folder):
-        if file.endswith(('.mp3', '.m4a', '.wav', '.flac')):
+        if file.lower().endswith(('.mp3', '.m4a', '.wav', '.flac', '.opus', '.aac')):
             source_path = os.path.join(source_folder, file)
             if os.path.isfile(source_path):
                 songs_to_copy.append(source_path)
@@ -169,24 +187,23 @@ def copy_songs_to_pendrive(source_folder='Dad_Car_Songs',
         return False
     
     # Scan pen drive for existing files if checking duplicates
-    existing_hashes = {}
+    existing_sizes = {}
     if check_duplicates:
         print(f"📂 Scanning pen drive: {dest_subfolder}")
-        existing_hashes = scan_directory_for_hashes(dest_subfolder)
+        existing_sizes = scan_directory_for_sizes(dest_subfolder)
     
     # Prepare copy tasks
     tasks = []
     for i, source_path in enumerate(songs_to_copy):
         filename = os.path.basename(source_path)
         dest_path = os.path.join(dest_subfolder, filename)
-        tasks.append((i+1, len(songs_to_copy), source_path, dest_path, existing_hashes))
+        tasks.append((i+1, len(songs_to_copy), source_path, dest_path, existing_sizes))
     
     print("Starting copy process...\n")
     
     copied_count = 0
     skipped_count = 0
     failed_count = 0
-    total_size_copied = 0
     
     start_time = time.time()
     
@@ -208,7 +225,7 @@ def copy_songs_to_pendrive(source_folder='Dad_Car_Songs',
                 failed_count += 1
             
             completed += 1
-            if completed % 5 == 0:
+            if completed % 5 == 0 or completed == len(songs_to_copy):
                 progress = (completed / len(songs_to_copy)) * 100
                 with print_lock:
                     print(f"📊 Progress: {completed}/{len(songs_to_copy)} ({progress:.0f}%)")
@@ -220,7 +237,7 @@ def copy_songs_to_pendrive(source_folder='Dad_Car_Songs',
     print("✨ Copy Complete!")
     print("="*60)
     print(f"📤 Copied:  {copied_count}")
-    print(f"⏭️  Skipped: {skipped_count} (duplicates)")
+    print(f"⏭️  Skipped: {skipped_count} (duplicates / already present)")
     print(f"❌ Failed:  {failed_count}")
     print(f"📁 Destination: {dest_subfolder}")
     print(f"⏱️  Time: {elapsed_time:.1f} seconds")
@@ -236,7 +253,7 @@ if __name__ == "__main__":
     # Configuration
     SOURCE_FOLDER = './Dad_Car_Songs'  # Folder with downloaded songs
     PENDRIVE_PATH = r'D:\Spotify songs'  # Pen drive path with existing songs
-    MAX_WORKERS = 10  # Number of parallel copy threads
+    MAX_WORKERS = 8  # Number of parallel copy threads
     CHECK_DUPLICATES = True  # Enable duplicate detection
     
     # Run copy process

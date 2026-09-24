@@ -69,10 +69,18 @@ def get_ffmpeg_dir():
         if local_app_data:
             winget_pkgs = os.path.join(local_app_data, 'Microsoft', 'WinGet', 'Packages')
             if os.path.isdir(winget_pkgs):
-                for root, _, files in os.walk(winget_pkgs):
-                    if 'ffmpeg.exe' in files:
-                        return root
+                for pkg in os.listdir(winget_pkgs):
+                    if 'ffmpeg' in pkg.lower():
+                        pkg_path = os.path.join(winget_pkgs, pkg)
+                        for root, _, files in os.walk(pkg_path):
+                            if 'ffmpeg.exe' in files:
+                                return root
     return None
+
+# Ensure FFmpeg directory is in system PATH if found
+_ffmpeg_dir_init = get_ffmpeg_dir()
+if _ffmpeg_dir_init and _ffmpeg_dir_init not in os.environ.get('PATH', ''):
+    os.environ['PATH'] = f"{_ffmpeg_dir_init};{os.environ.get('PATH', '')}"
 
 # ============================================================================
 # PART 1: CONVERT SPOTIFY TRACK URLs TO SONG METADATA
@@ -523,8 +531,8 @@ def download_single_song(args):
         return 'skipped'
     
     # Check local library folders first to accelerate downloads
-    local_libs = ['./Dad_Car_Songs', './Spotify songs']
-    local_libs = [lib for lib in local_libs if os.path.abspath(lib) != os.path.abspath(output_path)]
+    local_libs = ['./Dad_Car_Songs', './Spotify songs', './Mithun_songs']
+    local_libs = [lib for lib in local_libs if os.path.exists(lib) and os.path.abspath(lib) != os.path.abspath(output_path)]
     existing_lib_file = find_existing_song_in_library(song, local_libs)
     if existing_lib_file:
         try:
