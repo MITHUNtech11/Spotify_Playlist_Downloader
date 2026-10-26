@@ -3,6 +3,7 @@ from app.services.spotify_service import (
     parse_spotify_url,
     normalize_title,
     is_song_downloaded,
+    resolve_track_metadata,
     resolve_input_batch
 )
 from app.models.track import TrackItem
@@ -23,6 +24,29 @@ def test_duplicate_check(tmp_path):
     (tmp_path / "My Favorite Song.mp3").write_text("audio")
     assert is_song_downloaded("My Favorite Song", str(tmp_path)) is True
     assert is_song_downloaded("Different Song", str(tmp_path)) is False
+
+def test_duplicate_check_no_false_positive_on_common_words(tmp_path):
+    (tmp_path / "One Love.mp3").write_text("audio")
+    (tmp_path / "Post Malone - Sunflower.mp3").write_text("audio")
+    
+    # "Love" should NOT match "One Love"
+    assert is_song_downloaded("Love", str(tmp_path)) is False
+    # "One" should NOT match "Post Malone" or "One Love"
+    assert is_song_downloaded("One", str(tmp_path)) is False
+    # Exact match works
+    assert is_song_downloaded("One Love", str(tmp_path)) is True
+
+def test_resolve_invalid_track_returns_none(monkeypatch):
+    class Mock404:
+        status_code = 404
+        text = "Not Found"
+        def json(self): return {}
+    monkeypatch.setattr("requests.get", lambda *args, **kwargs: Mock404())
+    
+    track = resolve_track_metadata("404tracknotfound")
+    assert track is None
+
+
 
 def test_resolve_input_batch_with_duplicates(tmp_path, monkeypatch):
     # Mock resolving a track

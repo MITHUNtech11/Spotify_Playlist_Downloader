@@ -57,7 +57,8 @@ def is_song_downloaded(song_name: str, download_folder: str) -> bool:
         if item.lower().endswith(('.mp3', '.m4a', '.flac', '.wav')):
             filename_without_ext = os.path.splitext(item)[0]
             existing_norm = normalize_title(filename_without_ext)
-            if target_norm == existing_norm or target_norm in existing_norm or existing_norm in target_norm:
+            # Strict equality after normalization avoids false positives on common words
+            if target_norm == existing_norm:
                 return True
     return False
 
@@ -125,12 +126,7 @@ def resolve_track_metadata(track_id: str) -> Optional[TrackItem]:
     except Exception:
         pass
         
-    return TrackItem(
-        id=track_id,
-        title=f"Track {track_id}",
-        artist="Unknown Artist",
-        spotify_url=track_url
-    )
+    return None
 
 def resolve_playlist_tracks(playlist_id: str) -> List[TrackItem]:
     """Extract tracks from a public Spotify playlist embed or page."""

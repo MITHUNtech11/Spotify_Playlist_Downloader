@@ -133,6 +133,10 @@ async def get_usb_drives():
 
 @app.post("/api/usb/analyze", response_model=UsbSyncSummary)
 async def analyze_usb(req: UsbActionRequest):
+    drive_root = os.path.splitdrive(req.drive_letter)[0] or req.drive_letter
+    if not os.path.exists(drive_root):
+        raise HTTPException(status_code=400, detail=f"Drive {req.drive_letter} is not connected or accessible.")
+    
     settings = get_settings()
     dest = req.drive_letter
     if req.target_subfolder:
@@ -141,6 +145,10 @@ async def analyze_usb(req: UsbActionRequest):
 
 @app.post("/api/usb/sync")
 async def start_usb_sync(req: UsbActionRequest, background_tasks: BackgroundTasks):
+    drive_root = os.path.splitdrive(req.drive_letter)[0] or req.drive_letter
+    if not os.path.exists(drive_root):
+        raise HTTPException(status_code=400, detail=f"Drive {req.drive_letter} is not connected or accessible.")
+
     settings = get_settings()
     dest = req.drive_letter
     if req.target_subfolder:

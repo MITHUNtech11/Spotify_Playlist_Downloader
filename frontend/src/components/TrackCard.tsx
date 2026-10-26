@@ -35,6 +35,12 @@ export const TrackCard: React.FC<TrackCardProps> = ({ track, onCancel, onRetry }
             <Loader2 className="w-3 h-3 animate-spin" /> Downloading
           </span>
         );
+      case 'retrying':
+        return (
+          <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
+            <RotateCw className="w-3 h-3 animate-spin" /> Rate limited (Retrying...)
+          </span>
+        );
       case 'converting':
         return (
           <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
@@ -74,7 +80,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({ track, onCancel, onRetry }
     }
   };
 
-  const isDownloading = track.status === 'downloading' || track.status === 'converting' || track.status === 'tagging';
+  const isDownloading = track.status === 'downloading' || track.status === 'retrying' || track.status === 'converting' || track.status === 'tagging';
 
   return (
     <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-3.5 flex flex-col gap-2.5 hover:border-zinc-700 transition">

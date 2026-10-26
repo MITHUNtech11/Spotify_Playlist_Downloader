@@ -1,5 +1,5 @@
 import pytest
-from app.services.usb_service import compute_file_hash, analyze_usb_sync, list_usb_drives
+from app.services.usb_service import compute_file_hash, analyze_usb_sync, list_usb_drives, sync_to_usb
 from app.models.usb import UsbDrive, UsbSyncSummary
 
 def test_compute_file_hash(tmp_path):
@@ -33,3 +33,13 @@ def test_analyze_usb_sync(tmp_path):
 def test_list_usb_drives():
     drives = list_usb_drives()
     assert isinstance(drives, list)
+
+def test_usb_missing_drive_handling():
+    summary = analyze_usb_sync("./Dad_Car_Songs", "Z:\\NonExistentDrive")
+    assert summary.enough_space is False
+
+def test_sync_to_usb_nonexistent_drive_reports_error():
+    res = sync_to_usb("./Dad_Car_Songs", "Z:\\NonExistentDrive\\Music")
+    assert res.get("status") == "error"
+    assert len(res.get("errors", [])) > 0
+

@@ -62,16 +62,22 @@ class DownloaderService:
         if not os.path.exists(download_folder):
             return
         track = self.get_track(track_id)
-        patterns = ["*.part", "*.ytdl", "*.temp"]
-        if track:
-            sanitized = re.sub(r'[\\/*?:"<>|]', "", track.title)
-            patterns.append(f"*{sanitized}*.part")
-        for pat in patterns:
-            for f in glob.glob(os.path.join(download_folder, pat)):
-                try:
-                    os.remove(f)
-                except Exception:
-                    pass
+        if not track:
+            return
+
+        sanitized_title = re.sub(r'[\\/*?:"<>|]', "", track.title).strip()
+        sanitized_artist = re.sub(r'[\\/*?:"<>|]', "", track.artist).strip()
+        
+        # Look for partial files matching this specific track
+        for f in os.listdir(download_folder):
+            f_lower = f.lower()
+            if f_lower.endswith(('.part', '.ytdl', '.temp')):
+                # Check if this file belongs to the current track
+                if (sanitized_title.lower() in f_lower) or (sanitized_artist.lower() in f_lower):
+                    try:
+                        os.remove(os.path.join(download_folder, f))
+                    except Exception:
+                        pass
 
     def start_downloads(self, track_ids: Optional[List[str]] = None, output_folder: Optional[str] = None):
         settings = get_settings()
@@ -155,6 +161,7 @@ class DownloaderService:
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
+            'sleep_interval_requests': 1.0,
             'progress_hooks': [ytdl_progress_hook],
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -163,68 +170,103 @@ class DownloaderService:
             }],
         }
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(search_query, download=True)
-                downloaded_title = info.get('title', track.title) if info else track.title
-                
-            # File converted to mp3
+        max_retries = 3
+        backoff_sec = 2.0
+        last_error = None
+
+        for attempt in range(1, max_retries + 1):
+            if track_id in self.cancelled_tracks:
+                break
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(search_query, download=True)
+                    
+                    # File converted to mp3
+                    with self.lock:
+                        track.status = "tagging"
+                        track.progress = 95.0
+                    event_bus.publish({"type": "status", "track_id": track_id, "status": "tagging"})
+
+                    # Exact filepath resolution using prepare_filename (Issue 2.1 fix)
+                    raw_filename = ydl.prepare_filename(info) if info else None
+                    if raw_filename:
+                        expected_file = os.path.splitext(raw_filename)[0] + ".mp3"
+                    else:
+                        expected_file = os.path.join(output_folder, f"{track.title}.mp3")
+
+                    if not os.path.exists(expected_file):
+                        # Fallback search if extension replacement differed
+                        sanitized_title = re.sub(r'[\\/*?:"<>|]', "", track.title).strip().lower()
+                        for f in os.listdir(output_folder):
+                            if f.lower().endswith(".mp3") and sanitized_title in f.lower():
+                                expected_file = os.path.join(output_folder, f)
+                                break
+
+                    if os.path.exists(expected_file):
+                        embed_id3_metadata(
+                            expected_file,
+                            title=track.title,
+                            artist=track.artist,
+                            album=track.album,
+                            cover_url=track.thumbnail_url
+                        )
+
+                    with self.lock:
+                        track.status = "completed"
+                        track.progress = 100.0
+                        track.speed = None
+                        track.eta = None
+                        track.already_downloaded = True
+
+                    event_bus.publish({
+                        "type": "status",
+                        "track_id": track_id,
+                        "status": "completed",
+                        "progress": 100.0
+                    })
+                    return
+
+            except Exception as e:
+                last_error = e
+                err_msg = str(e)
+                if "cancelled by user" in err_msg.lower():
+                    with self.lock:
+                        track.status = "cancelled"
+                        track.speed = None
+                        track.eta = None
+                    event_bus.publish({"type": "status", "track_id": track_id, "status": "cancelled"})
+                    self._cleanup_partial_files(track_id, output_folder)
+                    return
+                elif ("429" in err_msg or "too many requests" in err_msg.lower()) and attempt < max_retries:
+                    with self.lock:
+                        track.status = "retrying"
+                        track.error_message = f"Rate limited by YouTube. Retrying in {int(backoff_sec)}s..."
+                    event_bus.publish({
+                        "type": "status",
+                        "track_id": track_id,
+                        "status": "retrying",
+                        "error_message": track.error_message
+                    })
+                    time.sleep(backoff_sec)
+                    backoff_sec *= 2
+                    continue
+                else:
+                    break
+
+        # If loop finishes without returning, record failure
+        if last_error:
+            err_msg = str(last_error)
             with self.lock:
-                track.status = "tagging"
-                track.progress = 95.0
-            event_bus.publish({"type": "status", "track_id": track_id, "status": "tagging"})
-
-            # Find generated mp3 file
-            expected_file = os.path.join(output_folder, f"{downloaded_title}.mp3")
-            if not os.path.exists(expected_file):
-                # Search for latest modified mp3 in directory
-                mp3s = glob.glob(os.path.join(output_folder, "*.mp3"))
-                if mp3s:
-                    expected_file = max(mp3s, key=os.path.getmtime)
-
-            if os.path.exists(expected_file):
-                embed_id3_metadata(
-                    expected_file,
-                    title=track.title,
-                    artist=track.artist,
-                    album=track.album,
-                    cover_url=track.thumbnail_url
-                )
-
-            with self.lock:
-                track.status = "completed"
-                track.progress = 100.0
+                track.status = "error"
+                track.error_message = err_msg
                 track.speed = None
                 track.eta = None
-                track.already_downloaded = True
-
             event_bus.publish({
                 "type": "status",
                 "track_id": track_id,
-                "status": "completed",
-                "progress": 100.0
+                "status": "error",
+                "error_message": err_msg
             })
-
-        except Exception as e:
-            err_msg = str(e)
-            if "cancelled by user" in err_msg.lower():
-                with self.lock:
-                    track.status = "cancelled"
-                    track.speed = None
-                    track.eta = None
-                event_bus.publish({"type": "status", "track_id": track_id, "status": "cancelled"})
-            else:
-                with self.lock:
-                    track.status = "error"
-                    track.error_message = err_msg
-                    track.speed = None
-                    track.eta = None
-                event_bus.publish({
-                    "type": "status",
-                    "track_id": track_id,
-                    "status": "error",
-                    "error_message": err_msg
-                })
             self._cleanup_partial_files(track_id, output_folder)
 
 downloader_service = DownloaderService()

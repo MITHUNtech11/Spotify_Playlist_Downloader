@@ -73,7 +73,8 @@ def scan_directory_hashes(directory: str) -> Dict[str, str]:
 
 def analyze_usb_sync(source_folder: str, destination_folder: str) -> UsbSyncSummary:
     """Analyze source and target USB destination for missing tracks and capacity."""
-    if not os.path.exists(source_folder):
+    drive_root = os.path.splitdrive(destination_folder)[0] or destination_folder
+    if not os.path.exists(drive_root) or not os.path.exists(source_folder):
         return UsbSyncSummary(
             source_folder=source_folder,
             drive_letter=destination_folder,
@@ -81,7 +82,7 @@ def analyze_usb_sync(source_folder: str, destination_folder: str) -> UsbSyncSumm
             already_synced_tracks=0,
             new_tracks_to_copy=0,
             estimated_size_mb=0.0,
-            enough_space=True
+            enough_space=False
         )
 
     # Hashes already on destination
@@ -110,12 +111,12 @@ def analyze_usb_sync(source_folder: str, destination_folder: str) -> UsbSyncSumm
     if needed_bytes > 0 and needed_mb == 0.0:
         needed_mb = 0.01
     
-    enough_space = True
+    enough_space = False
     try:
-        usage = shutil.disk_usage(destination_folder)
+        usage = shutil.disk_usage(drive_root)
         enough_space = usage.free >= needed_bytes
     except Exception:
-        pass
+        enough_space = False
 
     return UsbSyncSummary(
         source_folder=source_folder,
@@ -129,10 +130,44 @@ def analyze_usb_sync(source_folder: str, destination_folder: str) -> UsbSyncSumm
 
 def sync_to_usb(source_folder: str, destination_folder: str) -> Dict[str, Any]:
     """Copy missing audio files from source to destination drive, emitting progress events."""
-    os.makedirs(destination_folder, exist_ok=True)
+    drive_root = os.path.splitdrive(destination_folder)[0] or destination_folder
+    if not os.path.exists(drive_root):
+        err_msg = f"Drive {drive_root} is not connected or accessible."
+        event_bus.publish({
+            "type": "usb_sync_progress",
+            "current_file": "Sync Failed",
+            "status": "error",
+            "error_message": err_msg
+        })
+        return {
+            "status": "error",
+            "synced": 0,
+            "skipped": 0,
+            "total": 0,
+            "errors": [err_msg]
+        }
+
+    try:
+        os.makedirs(destination_folder, exist_ok=True)
+    except Exception as e:
+        err_msg = f"Cannot create destination path: {str(e)}"
+        event_bus.publish({
+            "type": "usb_sync_progress",
+            "current_file": "Sync Failed",
+            "status": "error",
+            "error_message": err_msg
+        })
+        return {
+            "status": "error",
+            "synced": 0,
+            "skipped": 0,
+            "total": 0,
+            "errors": [err_msg]
+        }
+
     dest_hashes = scan_directory_hashes(destination_folder)
-    
     files_to_copy: List[str] = []
+    
     for item in os.listdir(source_folder):
         if item.lower().endswith(AUDIO_EXTENSIONS):
             full_src = os.path.join(source_folder, item)
@@ -165,16 +200,19 @@ def sync_to_usb(source_folder: str, destination_folder: str) -> Dict[str, Any]:
         except Exception as e:
             errors.append(f"{filename}: {str(e)}")
 
+    final_status = "completed" if not errors else ("partial" if copied > 0 else "error")
     event_bus.publish({
         "type": "usb_sync_progress",
-        "current_file": "Sync Complete",
+        "current_file": "Sync Complete" if final_status == "completed" else "Sync Finished with Errors",
         "copied": copied,
         "total": total,
         "percent": 100.0,
-        "status": "completed"
+        "status": final_status,
+        "error_message": "; ".join(errors) if errors else None
     })
 
     return {
+        "status": final_status,
         "synced": copied,
         "skipped": len(dest_hashes),
         "total": total,
