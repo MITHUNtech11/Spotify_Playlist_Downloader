@@ -46,4 +46,12 @@ download_log.txt
 Dad_Car_Songs/
 Spotify songs/
 Mithun_songs/
-trial/
+trial/
+
+# Frontend Node.js
+frontend/node_modules/
+frontend/dist/
+
+# Superpowers & pytest
+.superpowers/
+.pytest_cache/
